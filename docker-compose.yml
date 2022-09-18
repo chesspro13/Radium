@@ -1,4 +1,11 @@
 version: "3.3"
+
+networks:
+  frontend:
+    external: true
+  backend:
+    external: false
+
 services:
 
   traefik:
@@ -12,18 +19,25 @@ services:
     volumes:
       - '/var/run/docker.sock:/var/run/docker.sock:ro'
       - './traefik.toml:/traefik.toml'
+    networks:
+      - frontend
+      - backend
+
 
   radium:
     container_name: radium
     environment:
       - "BASE_URL=http://watch.localhost"
-#     - 'HLS_URL=http://127.0.0.1:3000/stream.m3u8'
+      - 'HLS_URL=http://ffmpeg.localhost/output.m3u8'
       #  - ADMIN_TOKEN=secret123
     image: ghcr.io/zibbp/radium:latest
     labels:
       - 'traefik.enable=true'
       - 'traefik.http.routers.radium.rule=Host(`watch.localhost`)'
       - 'traefik.http.routers.radium.entrypoints=web'
+    networks:
+      - frontend
+      - backend
 
   whoami:
     container_name: whoami
@@ -33,3 +47,18 @@ services:
       - 'traefik.enable=true'
       - 'traefik.http.routers.whoami.rule=Host(`who.localhost`)'
       - 'traefik.http.routers.whoami.entrypoints=web'
+
+  converter:
+    container_name: converter
+    build: ./ffmpeg-automation/
+    restart: 'unless-stopped'
+    ports:
+      - '1935:1935'
+    volumes:
+      - './output:/usr/local/apache2/htdocs/'
+    labels:
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.converter.rule=Host(`ffmpeg.localhost`)'
+      - 'traefik.http.routers.converter.entrypoints=hls'
+    networks:
+      - backend
